@@ -1,0 +1,1 @@
+fetch('account-config.json',{cache:'no-store'}).then(r=>r.json()).then(c=>{document.getElementById('onlineStatus').textContent=c.ready?'Freischaltung nach bestätigter Registrierung und Anbieterfreigabe.':'Online-Freischaltung wird noch eingerichtet. Pro ist bis dahin nicht freischaltbar.'}).catch(()=>{});
