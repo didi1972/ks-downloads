@@ -5,4 +5,5 @@ Offizielle KS Lite / KS Pro Installationsdateien und Updatepakete für GTA V Leg
 - Downloadseite: https://didi1972.github.io/ks-downloads/
 - Installationsdateien: https://github.com/didi1972/ks-downloads/releases/latest
 
-Der Pro-Kontodienst wird noch eingerichtet. Lite benötigt kein Konto. Quellcode, private Codeverwaltung und Grafikpakete Dritter werden hier nicht veröffentlicht.
+Die Registrierung ist geöffnet. Pro wird nach persönlicher Anbieterfreigabe freigeschaltet. Lite benötigt kein Konto. Quellcode, private Codeverwaltung und Grafikpakete Dritter werden hier nicht veröffentlicht.
+
