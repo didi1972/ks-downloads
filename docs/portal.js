@@ -29,7 +29,7 @@ async function run(action){busy(true);try{await action()}catch(e){status(e.messa
 async function signIn(){const value=await request('/auth/v1/token?grant_type=password',{email:byId('email').value.trim(),password:byId('password').value});showAccount(value.user,value.access_token);status('Angemeldet. Du kannst jetzt Zugang anfragen oder deinen freigegebenen Code abholen.')}
 byId('login').onclick=()=>run(signIn);
 function emailAddress(){const email=byId('email').value.trim();if(email.length>254||!/^\S+@\S+\.\S+$/.test(email))throw Error('Bitte eine gültige E-Mail-Adresse eingeben.');return email}
-function showOtp(email,type,finish){otpEmail=email;otpType=type;otpFinish=finish;byId('otpEmail').textContent=email;byId('otpCode').value='';byId('loginPanel').hidden=true;byId('passwordPanel').hidden=true;byId('accountPanel').hidden=true;byId('otpPanel').hidden=false;status('Gib den sechsstelligen Code aus der neuesten KS-Mail hier ein. Du musst keinen Mail-Link öffnen.');}
+function showOtp(email,type,finish){otpEmail=email;otpType=type;otpFinish=finish;byId('otpEmail').textContent=email;byId('otpCode').value='';byId('loginPanel').hidden=true;byId('passwordPanel').hidden=true;byId('accountPanel').hidden=true;byId('otpPanel').hidden=false;status('Gib den vollständigen Code aus der neuesten KS-Mail hier ein. Du musst keinen Mail-Link öffnen.');}
 async function sendOtp(email,type='email',finish='password'){
  if(email===otpEmail&&Date.now()-otpSentAt<60000)throw Error('Bitte vor einem neuen Code eine Minute warten. Verwende die neueste KS-Mail.');
  await request(type==='recovery'?'/auth/v1/recover':'/auth/v1/otp',type==='recovery'?{email}:{email,create_user:false});
@@ -40,7 +40,8 @@ byId('resendCode').onclick=()=>run(()=>sendOtp(otpEmail,otpType,otpFinish));
 byId('cancelCode').onclick=()=>{signedOut();status('Bitte anmelden oder einen E-Mail-Code anfordern.');};
 byId('verifyCode').onclick=()=>run(async()=>{
  const token=byId('otpCode').value.trim();
- if(!/^[0-9]{6}$/.test(token))throw Error('Bitte den vollständigen sechsstelligen Code eingeben.');
+ const digits=config.otp_digits===6?6:8;
+ if(!new RegExp('^[0-9]{'+digits+'}$').test(token))throw Error('Bitte den vollständigen '+digits+'-stelligen Code eingeben.');
  const value=await request('/auth/v1/verify',{email:otpEmail,token,type:otpType});
  if(!value.access_token||!value.user?.email)throw Error('Der Code konnte nicht bestätigt werden.');
  byId('otpCode').value='';byId('otpPanel').hidden=true;
@@ -66,6 +67,7 @@ byId('savePassword').onclick=()=>run(async()=>{
  if(!response.ok)throw Error('Kontodienst-Konfiguration konnte nicht geladen werden.');
  config=await response.json();
  if(config.ready&&(!/^https:\/\/[a-z0-9]{10,64}\.supabase\.co$/.test(config.url)||typeof config.publishable_key!=='string'||!config.publishable_key.startsWith('sb_publishable_')))throw Error('Kontodienst-Konfiguration ist ungültig.');
+ byId('otpCode').maxLength=config.otp_digits===6?6:8;byId('otpCode').pattern='[0-9]{'+byId('otpCode').maxLength+'}';
  if(!config.ready){status('Der Kontodienst und die Code-Ausgabe werden noch eingerichtet. Bitte später einen neuen Bestätigungslink anfordern.');return}
  if(linkError){status('Der Bestätigungslink ist ungültig oder abgelaufen. Bitte erneut anmelden oder einen neuen Passwortlink anfordern.');return}
  if(linkToken){
