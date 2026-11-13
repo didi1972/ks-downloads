@@ -38,8 +38,9 @@ byId('savePassword').onclick=()=>run(async()=>{
  const password=byId('newPassword').value;
  if(password.length<8||password!==byId('repeatPassword').value)throw Error('Passwörter müssen übereinstimmen und mindestens acht Zeichen lang sein.');
  if(!passwordToken)throw Error('Bitte einen neuen Bestätigungs- oder Passwortlink anfordern.');
- await request('/auth/v1/user',{password},passwordToken,'PUT');
- signedOut();status('Passwort gespeichert. Du kannst dich jetzt hier oder in KS Pro anmelden.');
+ const user=await request('/auth/v1/user',{password},passwordToken,'PUT');
+ showAccount(user,passwordToken);passwordToken='';byId('newPassword').value=byId('repeatPassword').value='';
+ status('Passwort gespeichert. Du kannst jetzt Zugang anfragen und dich in KS Pro mit diesem Passwort anmelden.');
 });
 (async()=>{busy(true);try{
  const response=await fetch('account-config.json',{cache:'no-store'});
