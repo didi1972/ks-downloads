@@ -1,4 +1,5 @@
 'use strict';
+let shop=null;
 let config=null,session=null,pendingCode='',passwordToken='',otpEmail='',otpType='email',otpFinish='password',otpSentAt=0;
 const byId=id=>document.getElementById(id);
 const status=message=>byId('status').textContent=message;
@@ -23,7 +24,7 @@ async function request(path,data=null,token=null,method='POST'){
 }
 function busy(value){document.querySelectorAll('button').forEach(button=>button.disabled=value||!config?.ready)}
 function clearCode(){pendingCode='';byId('codeResult').textContent='';byId('redeem').hidden=true}
-function signedOut(){session=null;passwordToken='';otpEmail='';byId('otpPanel').hidden=true;byId('otpCode').value='';clearCode();byId('identity').textContent='';byId('accountPanel').hidden=true;byId('passwordPanel').hidden=true;byId('loginPanel').hidden=false;byId('newPassword').value=byId('repeatPassword').value=''}
+function signedOut(){session=null;passwordToken='';otpEmail='';byId('otpPanel').hidden=true;byId('otpCode').value='';clearCode();byId('identity').textContent='';byId('paymentReference').value='';byId('accountPanel').hidden=true;byId('passwordPanel').hidden=true;byId('loginPanel').hidden=false;byId('newPassword').value=byId('repeatPassword').value=''}
 function showAccount(user,token){byId('otpPanel').hidden=true;byId('otpCode').value='';if(!user||typeof user.email!=='string'||!token)throw Error('Anmeldung ist noch nicht abgeschlossen.');clearCode();session={access_token:token};byId('identity').textContent='Angemeldet: '+user.email;byId('email').value=user.email;byId('loginPanel').hidden=true;byId('passwordPanel').hidden=true;byId('accountPanel').hidden=false}
 async function run(action){busy(true);try{await action()}catch(e){status(e.message)}finally{byId('password').value='';busy(false)}}
 async function signIn(){const value=await request('/auth/v1/token?grant_type=password',{email:byId('email').value.trim(),password:byId('password').value});showAccount(value.user,value.access_token);status('Angemeldet. Du kannst jetzt Zugang anfragen oder deinen freigegebenen Code abholen.')}
@@ -50,7 +51,7 @@ byId('verifyCode').onclick=()=>run(async()=>{
 });
 byId('signup').onclick=()=>run(async()=>{const email=emailAddress();if(byId('password').value.length<8)throw Error('Bitte mindestens acht Zeichen als Passwort verwenden.');await request('/auth/v1/signup',{email,password:byId('password').value});otpSentAt=Date.now();showOtp(email,'email','account');});
 byId('reset').onclick=()=>run(()=>sendOtp(emailAddress(),'recovery','password'));
-byId('request').onclick=()=>run(async()=>{const r=await request('/rest/v1/rpc/ks_request_access',{},session.access_token);status(r.message||'Zugangsanfrage übermittelt.');});
+byId('request').onclick=()=>run(async()=>{const reference=byId('paymentReference').value.trim();const r=await request(shop?.paypal_url?'/rest/v1/rpc/ks_payment_request':'/rest/v1/rpc/ks_request_access',shop?.paypal_url?{payment_reference:reference}:{},session.access_token);byId('paymentReference').value='';status(r.message||'Zugangsanfrage übermittelt.');});
 byId('checkRequest').onclick=()=>run(async()=>{const r=await request('/rest/v1/rpc/ks_access_request_status',{},session.access_token);status(r.message||'Freigabestatus abgefragt.');clearCode();pendingCode=typeof r.code==='string'?r.code:'';byId('codeResult').textContent=pendingCode;byId('redeem').hidden=!pendingCode;});
 byId('redeem').onclick=()=>run(async()=>{const r=await request('/rest/v1/rpc/ks_redeem_code',{code:pendingCode},session.access_token);if(!r.active)throw Error(r.message||'Code konnte nicht eingelöst werden.');clearCode();status('Vollversion für dein Konto freigeschaltet. In KS Pro mit demselben Konto anmelden.');});
 byId('logout').onclick=()=>{signedOut();status('Abgemeldet.');};
@@ -69,6 +70,7 @@ byId('savePassword').onclick=()=>run(async()=>{
  if(config.ready&&(!/^https:\/\/[a-z0-9]{10,64}\.supabase\.co$/.test(config.url)||typeof config.publishable_key!=='string'||!config.publishable_key.startsWith('sb_publishable_')))throw Error('Kontodienst-Konfiguration ist ungültig.');
  byId('otpCode').maxLength=config.otp_digits===6?6:8;byId('otpCode').pattern='[0-9]{'+byId('otpCode').maxLength+'}';
  if(!config.ready){status('Der Kontodienst und die Code-Ausgabe werden noch eingerichtet. Bitte später einen neuen Bestätigungslink anfordern.');return}
+ try{const value=await request('/rest/v1/rpc/ks_shop_info',{});if(value&&typeof value.paypal_url==='string'&&/^https:\/\/(www\.)?(paypal\.me|paypal\.com)\/[A-Za-z0-9/?=&_%.,~-]+$/.test(value.paypal_url)){shop=value;byId('proPrice').textContent=value.price_label||'Preis beim Anbieter';byId('paypalPay').href=value.paypal_url;byId('paymentPanel').hidden=false;byId('request').textContent='Bezahlt / Freigabe anfragen';}}catch{}
  if(linkError){status('Der Bestätigungslink ist ungültig oder abgelaufen. Bitte erneut anmelden oder einen neuen Passwortlink anfordern.');return}
  if(linkToken){
   const user=await request('/auth/v1/user',null,linkToken,'GET');
