@@ -1,5 +1,5 @@
 'use strict';
-let config=null,session=null,pendingCode='',passwordToken='';
+let config=null,session=null,pendingCode='',passwordToken='',otpEmail='',otpType='email',otpFinish='password',otpSentAt=0;
 const byId=id=>document.getElementById(id);
 const status=message=>byId('status').textContent=message;
 const fragment=new URLSearchParams(location.hash.slice(1));
@@ -23,13 +23,32 @@ async function request(path,data=null,token=null,method='POST'){
 }
 function busy(value){document.querySelectorAll('button').forEach(button=>button.disabled=value||!config?.ready)}
 function clearCode(){pendingCode='';byId('codeResult').textContent='';byId('redeem').hidden=true}
-function signedOut(){session=null;passwordToken='';clearCode();byId('identity').textContent='';byId('accountPanel').hidden=true;byId('passwordPanel').hidden=true;byId('loginPanel').hidden=false;byId('newPassword').value=byId('repeatPassword').value=''}
-function showAccount(user,token){if(!user||typeof user.email!=='string'||!token)throw Error('Anmeldung ist noch nicht abgeschlossen.');clearCode();session={access_token:token};byId('identity').textContent='Angemeldet: '+user.email;byId('email').value=user.email;byId('loginPanel').hidden=true;byId('passwordPanel').hidden=true;byId('accountPanel').hidden=false}
+function signedOut(){session=null;passwordToken='';otpEmail='';byId('otpPanel').hidden=true;byId('otpCode').value='';clearCode();byId('identity').textContent='';byId('accountPanel').hidden=true;byId('passwordPanel').hidden=true;byId('loginPanel').hidden=false;byId('newPassword').value=byId('repeatPassword').value=''}
+function showAccount(user,token){byId('otpPanel').hidden=true;byId('otpCode').value='';if(!user||typeof user.email!=='string'||!token)throw Error('Anmeldung ist noch nicht abgeschlossen.');clearCode();session={access_token:token};byId('identity').textContent='Angemeldet: '+user.email;byId('email').value=user.email;byId('loginPanel').hidden=true;byId('passwordPanel').hidden=true;byId('accountPanel').hidden=false}
 async function run(action){busy(true);try{await action()}catch(e){status(e.message)}finally{byId('password').value='';busy(false)}}
 async function signIn(){const value=await request('/auth/v1/token?grant_type=password',{email:byId('email').value.trim(),password:byId('password').value});showAccount(value.user,value.access_token);status('Angemeldet. Du kannst jetzt Zugang anfragen oder deinen freigegebenen Code abholen.')}
 byId('login').onclick=()=>run(signIn);
-byId('signup').onclick=()=>run(async()=>{if(byId('password').value.length<8)throw Error('Bitte mindestens acht Zeichen als Passwort verwenden.');await request('/auth/v1/signup',{email:byId('email').value.trim(),password:byId('password').value});status('Registrierung angefordert. Bitte E-Mail bestätigen und anschließend anmelden.');});
-byId('reset').onclick=()=>run(async()=>{await request('/auth/v1/recover',{email:byId('email').value.trim()});status('Falls das Konto vorhanden ist, erhältst du eine E-Mail zum Zurücksetzen.');});
+function emailAddress(){const email=byId('email').value.trim();if(email.length>254||!/^\S+@\S+\.\S+$/.test(email))throw Error('Bitte eine gültige E-Mail-Adresse eingeben.');return email}
+function showOtp(email,type,finish){otpEmail=email;otpType=type;otpFinish=finish;byId('otpEmail').textContent=email;byId('otpCode').value='';byId('loginPanel').hidden=true;byId('passwordPanel').hidden=true;byId('accountPanel').hidden=true;byId('otpPanel').hidden=false;status('Gib den sechsstelligen Code aus der neuesten KS-Mail hier ein. Du musst keinen Mail-Link öffnen.');}
+async function sendOtp(email,type='email',finish='password'){
+ if(email===otpEmail&&Date.now()-otpSentAt<60000)throw Error('Bitte vor einem neuen Code eine Minute warten. Verwende die neueste KS-Mail.');
+ await request(type==='recovery'?'/auth/v1/recover':'/auth/v1/otp',type==='recovery'?{email}:{email,create_user:false});
+ otpSentAt=Date.now();showOtp(email,type,finish);
+}
+byId('sendCode').onclick=()=>run(()=>sendOtp(emailAddress()));
+byId('resendCode').onclick=()=>run(()=>sendOtp(otpEmail,otpType,otpFinish));
+byId('cancelCode').onclick=()=>{signedOut();status('Bitte anmelden oder einen E-Mail-Code anfordern.');};
+byId('verifyCode').onclick=()=>run(async()=>{
+ const token=byId('otpCode').value.trim();
+ if(!/^[0-9]{6}$/.test(token))throw Error('Bitte den vollständigen sechsstelligen Code eingeben.');
+ const value=await request('/auth/v1/verify',{email:otpEmail,token,type:otpType});
+ if(!value.access_token||!value.user?.email)throw Error('Der Code konnte nicht bestätigt werden.');
+ byId('otpCode').value='';byId('otpPanel').hidden=true;
+ if(otpFinish==='account'){showAccount(value.user,value.access_token);status('E-Mail bestätigt. Du kannst jetzt Zugang anfragen.');}
+ else{passwordToken=value.access_token;byId('email').value=value.user.email;byId('passwordTitle').textContent='Dein KS-Passwort festlegen';byId('passwordPanel').hidden=false;status('Code bestätigt. Lege jetzt dein persönliches KS-Passwort fest.');}
+});
+byId('signup').onclick=()=>run(async()=>{const email=emailAddress();if(byId('password').value.length<8)throw Error('Bitte mindestens acht Zeichen als Passwort verwenden.');await request('/auth/v1/signup',{email,password:byId('password').value});otpSentAt=Date.now();showOtp(email,'email','account');});
+byId('reset').onclick=()=>run(()=>sendOtp(emailAddress(),'recovery','password'));
 byId('request').onclick=()=>run(async()=>{const r=await request('/rest/v1/rpc/ks_request_access',{},session.access_token);status(r.message||'Zugangsanfrage übermittelt.');});
 byId('checkRequest').onclick=()=>run(async()=>{const r=await request('/rest/v1/rpc/ks_access_request_status',{},session.access_token);status(r.message||'Freigabestatus abgefragt.');clearCode();pendingCode=typeof r.code==='string'?r.code:'';byId('codeResult').textContent=pendingCode;byId('redeem').hidden=!pendingCode;});
 byId('redeem').onclick=()=>run(async()=>{const r=await request('/rest/v1/rpc/ks_redeem_code',{code:pendingCode},session.access_token);if(!r.active)throw Error(r.message||'Code konnte nicht eingelöst werden.');clearCode();status('Vollversion für dein Konto freigeschaltet. In KS Pro mit demselben Konto anmelden.');});
